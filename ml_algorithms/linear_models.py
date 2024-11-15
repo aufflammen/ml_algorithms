@@ -2,20 +2,10 @@ import numpy as np
 import pandas as pd
 
 from .metrics import *
+from .base import *
 
 
-class BaseLinearEstimator:
-
-    @staticmethod
-    def _to_numpy_with_bias(X: pd.DataFrame, y: pd.Series=None):
-        X = X.to_numpy()
-        # Добавляем столбец с единицами для включения bias
-        X = np.hstack([np.ones((X.shape[0], 1)), X])
-        if y is not None:
-            y = y.to_numpy()
-            return X, y
-        else:
-            return X
+class BaseLinear:
 
     def _reg_l1(self):
         loss_penalty = self.l1_coef * np.sum(np.abs(self.weights))
@@ -43,7 +33,7 @@ class BaseLinearEstimator:
         return f'{self.__class__.__name__}: n_iter={self.n_iter}, learning_rate={self.learning_rate}'
 
 
-class LinearRegression(BaseLinearEstimator, RegressionMetrics):
+class LinearRegression(Base, BaseLinear, RegressionMetrics):
     """
     Parameters
     ----------
@@ -137,7 +127,7 @@ class LinearRegression(BaseLinearEstimator, RegressionMetrics):
         return X @ self.weights
 
 
-class LogisticRegression(BaseLinearEstimator, ClassificationMetrics):
+class LogisticRegression(Base, BaseLinear, ClassificationMetrics):
     """
     Parameters
     ----------
@@ -228,7 +218,7 @@ class LogisticRegression(BaseLinearEstimator, ClassificationMetrics):
             if verbose and (i % verbose == 0 or i == 1 or i == self.n_iter):
                 self._verbose_view(y_sample, y_pred_logits, loss_penalty, i, lr)
 
-        # Рассчитываем наилучшую метрику после завершения обучения
+        # Рассчитываем метрику после завершения обучения
         if self.metric:
             y_pred_logits = self._sigmoid(X @ self.weights)
             self.best_score = self._get_score(y, y_pred_logits)
