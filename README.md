@@ -6,4 +6,5 @@
 **На данный момент реализовано:**
 - LinearRegression
 - LogisticRegression
+- DecisionTreeClassifier
 - Различные популярные метрики для регрессии и классификации
