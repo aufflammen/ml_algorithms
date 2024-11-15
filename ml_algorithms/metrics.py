@@ -56,3 +56,21 @@ class ClassificationMetrics:
 
         # Нормируем площадь
         return auc / (n_pos * n_neg)
+
+
+class RegressionMetrics:
+
+    def mae(self, y_true, y_pred):
+        return np.mean(np.abs(y_true - y_pred))
+
+    def mse(self, y_true, y_pred):
+        return np.mean((y_true - y_pred)**2)
+
+    def rmse(self, y_true, y_pred):
+        return self.mse(y_true, y_pred)**.5
+
+    def mape(self, y_true, y_pred):
+        return np.mean(np.abs((y_true - y_pred) / y_true)) * 100
+
+    def r2(self, y_true, y_pred):
+        return 1 - (np.mean((y_true - y_pred)**2) / np.var(y_true))
