@@ -7,6 +7,17 @@ from .base import *
 
 class BaseLinear:
 
+    @staticmethod
+    def _to_numpy_with_bias(X: pd.DataFrame, y: pd.Series=None):
+        X = X.to_numpy()
+        # Добавляем столбец с единицами для включения bias
+        X = np.hstack([np.ones((X.shape[0], 1)), X])
+        if y is not None:
+            y = y.to_numpy()
+            return X, y
+        else:
+            return X
+
     def _reg_l1(self):
         loss_penalty = self.l1_coef * np.sum(np.abs(self.weights))
         grad_penalty = self.l1_coef * np.sign(self.weights)
@@ -33,7 +44,7 @@ class BaseLinear:
         return f'{self.__class__.__name__}: n_iter={self.n_iter}, learning_rate={self.learning_rate}'
 
 
-class LinearRegression(Base, BaseLinear, RegressionMetrics):
+class LinearRegression(BaseLinear, RegressionMetrics):
     """
     Parameters
     ----------
@@ -127,7 +138,7 @@ class LinearRegression(Base, BaseLinear, RegressionMetrics):
         return X @ self.weights
 
 
-class LogisticRegression(Base, BaseLinear, ClassificationMetrics):
+class LogisticRegression(BaseLinear, ClassificationMetrics):
     """
     Parameters
     ----------
