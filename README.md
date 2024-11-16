@@ -9,5 +9,6 @@
 
 **Деревья решений:**
 - DecisionTreeClassifier
+- DecisionTreeRegressor
 
 **+** *Различные популярные метрики для регрессии и классификации*
