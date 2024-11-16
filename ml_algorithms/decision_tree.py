@@ -8,7 +8,8 @@ from .metrics import *
 class TreeNode:
     def __init__(self):
         self.n_samples = None
-        self.entropy = None
+        self.criterion = None
+        self.information_gain = None
         self.feature_idx = None
         self.threshold = None
         self.left = None
@@ -19,11 +20,11 @@ class TreeNode:
 
 class BaseDecisionTree:
 
-    # Вывод структуры дерева
+    # Вывод структуры построенного дерева
     def print_tree(self) -> str:
         # Рекурсивная функция для обхода дерева
         def traverse_print_tree(node, parent=None, depth=1):
-            params = f'entropy: {node.entropy:<8.4f} {node.value.tolist()}'
+            params = f'{self.criterion}: {node.criterion:<8.4f} {node.value.tolist()}'
             if not node.is_leaf:
                 print(f"{'-' * depth + str(self.features[node.feature_idx]):<25} > {node.threshold:<10.4f} {params}")
                 if node.left is not None:
@@ -40,32 +41,64 @@ class BaseDecisionTree:
 
 
 class MyTreeClf(BaseDecisionTree):
+    """
+    Parameters
+    ----------
+    max_depth : int, default=5
+
+    criterion : {gini, entropy}, default="entropy"
+
+    min_samples_split : int, default=2
+
+    max_leaf : int, default=20
+
+    bins : int, default=None
+        Values must be in the range `[3, inf)`.
+    """
 
     def __init__(
         self, 
         max_depth=5,
+        criterion='entropy',
         min_samples_split=2,
-        max_leafs=20
+        max_leafs=20,
+        bins=None
     ):       
         self.max_depth = max_depth
+        self.criterion = criterion
         self.min_samples_split = min_samples_split
         self.max_leafs = max_leafs
         self.leafs_cnt = 1
+        self.bins = bins
         
         self.root = None
         self.features = None
         self.n_features = None
+        self.n_samples_train = None
+        self.fi = None # Feature importance
         self.classes = None
         self.class_to_idx = None
         self.n_classes = None
+        self._criterion_func = getattr(self, '_' + self.criterion)
+
+        if self.bins and self.bins < 3:
+            raise ValueError('Parameter `bins` must be in the range `[3, inf)`')
 
     def fit(self, X: pd.DataFrame, y: pd.Series) -> None:
         self.features = X.columns
         self.n_features = len(self.features)
+        self.n_samples_train = X.shape[0]
+        self.fi = {k: 0 for k in self.features}
         self.classes = np.unique(y)
         self.class_to_idx = {v: k for k, v in enumerate(self.classes)}
         self.n_classes = len(self.classes)
         X, y = X.to_numpy(), y.to_numpy()
+
+        if self.bins:
+            self.thresholds_bins = []
+            for feature_idx in range(self.n_features):
+                self.thresholds_bins.append(np.histogram(X[:, feature_idx], bins=self.bins)[1][1:-1])
+        
         self.root = self._build_tree(TreeNode(), X, y, depth=0)
 
     def predict_proba(self, X: pd.DataFrame) -> np.ndarray:
@@ -103,7 +136,7 @@ class MyTreeClf(BaseDecisionTree):
 
         node.prediction = values[np.argmax(counts)]
         node.n_samples = len(y)
-        node.entropy = self._entropy(y)
+        node.criterion = self._criterion_func(y)
         
         # Условие остановки ветвления: проверяем, достигли ли мы максимальной глубины или минимального числа листьев
         if any((
@@ -115,21 +148,26 @@ class MyTreeClf(BaseDecisionTree):
             return node
 
         # Выбираем наилучший признак и порог для разбиения
-        best_feature_idx, best_threshold = self._get_best_split(X, y)
-        if best_feature_idx is None or best_threshold is None:
+        feature_idx, threshold, information_gain = self._get_best_split(X, y)
+        if feature_idx is None or threshold is None:
             return node
 
-        node.feature_idx = best_feature_idx
-        node.threshold = best_threshold
+        node.feature_idx = feature_idx
+        node.threshold = threshold
+        node.information_gain = information_gain
         node.is_leaf = False
         self.leafs_cnt += 1
 
         # Разделяем данные на левую и правую части
-        left_indices = X[:, best_feature_idx] <= best_threshold
-        right_indices = X[:, best_feature_idx] > best_threshold
+        left_indices = X[:, feature_idx] <= threshold
+        right_indices = X[:, feature_idx] > threshold
         left_X, left_y = X[left_indices], y[left_indices]
         right_X, right_y = X[right_indices], y[right_indices]
 
+        # Обновление списка важности признаков
+        fi = (len(left_y) + len(right_y)) * information_gain / self.n_samples_train
+        self.fi[self.features[feature_idx]] += fi 
+        
         # Рекурсивно строим поддеревья для каждого разбиения
         node.left = self._build_tree(TreeNode(), left_X, left_y, depth + 1)
         node.right = self._build_tree(TreeNode(), right_X, right_y, depth + 1)
@@ -137,15 +175,19 @@ class MyTreeClf(BaseDecisionTree):
         return node
 
     def _get_best_split(self, X: np.ndarray, y: np.ndarray):
-        best_entopy = self._entropy(y) # энтропия до разделения
-        best_feature_idx = best_threshold = None
+        best_criterion = begin_criterion = self._criterion_func(y) # энтропия до разделения
+        best_feature_idx = best_threshold = best_information_gain = None
     
         for feature_idx in range(self.n_features):
             X_current_feature = X[:, feature_idx]
             # Получаем отсортированный список уникальных значений признака
             unique_feature_values = np.unique(X_current_feature)
-            # В качестве порогов для разбиения берем среднее между каждой парой значений
-            thresholds = np.convolve(unique_feature_values, [.5, .5], mode='valid')   # аналог (a[:-1] + a[1:]) / 2
+
+            if self.bins:
+                thresholds = self.thresholds_bins[feature_idx]
+            else:
+                # В качестве порогов для разбиения берем среднее между каждой парой значений
+                thresholds = np.convolve(unique_feature_values, [.5, .5], mode='valid')   # аналог (a[:-1] + a[1:]) / 2
     
             for threshold in thresholds:
                 left_indices = X_current_feature <= threshold
@@ -154,19 +196,24 @@ class MyTreeClf(BaseDecisionTree):
                 len_left, len_right = len(left_y), len(right_y)
                 len_total = len_left + len_right
 
-                entropy_split = (len_left * self._entropy(left_y) + len_right * self._entropy(right_y)) / len_total
+                criterion_split = (len_left * self._criterion_func(left_y) + len_right * self._criterion_func(right_y)) / len_total
 
                 # проверяем, уменьшает ли текущее разделение энтропию
-                if best_entopy > entropy_split:
-                    best_entopy = entropy_split
+                if best_criterion > criterion_split:
+                    best_criterion = criterion_split
                     best_feature_idx = feature_idx
                     best_threshold = threshold
+                    best_information_gain = begin_criterion - criterion_split
                     
-        return best_feature_idx, best_threshold
+        return best_feature_idx, best_threshold, best_information_gain
 
-    @staticmethod
-    def _entropy(sample: pd.Series) -> float:
+    def _entropy(self, sample: np.ndarray) -> float:
         eps = 1e-12
         _, counts = np.unique(sample, return_counts=True)
         probabilities = np.clip(counts / np.sum(counts), eps, 1)
         return -(probabilities @ np.log2(probabilities))
+
+    def _gini(self, sample: np.ndarray) -> float:
+        _, counts = np.unique(sample, return_counts=True)
+        probabilities = np.square(counts / np.sum(counts))
+        return 1 - np.sum(probabilities)
