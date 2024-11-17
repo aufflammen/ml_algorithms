@@ -7,8 +7,12 @@
 - LinearRegression
 - LogisticRegression
 
+**Метрические алгоритмы:**
+- <s>KNNRegressor</s>
+- KNNClassifier
+
 **Деревья решений:**
-- DecisionTreeClassifier
 - DecisionTreeRegressor
+- DecisionTreeClassifier
 
 **+** *Различные популярные метрики для регрессии и классификации*

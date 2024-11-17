@@ -130,7 +130,7 @@ class BaseDecisionTree:
         return traverse_print_tree(self.root)
 
     def __str__(self) -> str:
-        return f'{self.__class__.__name__} class: max_depth={self.max_depth}, min_samples_split={self.min_samples_split}, max_leafs={self.max_leafs}'
+        return f'{self.__class__.__name__}: max_depth={self.max_depth}, min_samples_split={self.min_samples_split}, max_leafs={self.max_leafs}'
 
 
 class DecisionTreeRegressor(BaseDecisionTree):
