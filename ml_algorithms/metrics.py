@@ -1,9 +1,10 @@
 import numpy as np
 
 
-class ClassificationMetrics:
+class ClassificationMetric:
 
-    def confusion_matrix(self, y_true, y_pred):
+    @staticmethod
+    def confusion_matrix(y_true, y_pred):
         labels = np.unique([y_true, y_pred])
         n_labels = len(labels)
         label_to_index = {label: index for index, label in enumerate(labels)}
@@ -16,30 +17,36 @@ class ClassificationMetrics:
             matrix[i, j] += 1
 
         return matrix
-        
-    def logloss(self, y_true, y_pred_logits):
+
+    @staticmethod
+    def logloss(y_true, y_pred_logits):
         eps = 1e-12
         y_pred_logits = np.clip(y_pred_logits, eps, 1)
         return -np.mean(y_true * np.log(y_pred_logits) + (1 - y_true) * np.log(1 - y_pred_logits))
 
-    def accuracy(self, y_true, y_pred):
+    @staticmethod
+    def accuracy(y_true, y_pred):
         return np.mean(y_true == y_pred)
-    
-    def precision(self, y_true, y_pred):
-        tn, fp, fn, tp = self.confusion_matrix(y_true, y_pred).ravel()
+
+    @staticmethod
+    def precision(y_true, y_pred):
+        tn, fp, fn, tp = ClassificationMetric.confusion_matrix(y_true, y_pred).ravel()
         return tp / (tp + fp) if (tp + fp) > 0 else 0
 
-    def recall(self, y_true, y_pred):
-        tn, fp, fn, tp = self.confusion_matrix(y_true, y_pred).ravel()
+    @staticmethod
+    def recall(y_true, y_pred):
+        tn, fp, fn, tp = ClassificationMetric.confusion_matrix(y_true, y_pred).ravel()
         return tp / (tp + fn) if (tp + fn) > 0 else 0
 
-    def f1(self, y_true, y_pred):
-        tn, fp, fn, tp = self.confusion_matrix(y_true, y_pred).ravel()
+    @staticmethod
+    def f1(y_true, y_pred):
+        tn, fp, fn, tp = ClassificationMetric.confusion_matrix(y_true, y_pred).ravel()
         precision = tp / (tp + fp) if (tp + fp) > 0 else 0
         recall = tp / (tp + fn) if (tp + fn) > 0 else 0
         return 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0
 
-    def roc_auc(self, y_true, y_pred_proba):
+    @staticmethod
+    def roc_auc(y_true, y_pred_proba):
         sorted_indices = np.argsort(y_pred_proba)[::-1]
         y_true_sorted = y_true[sorted_indices]
     
@@ -58,19 +65,44 @@ class ClassificationMetrics:
         return auc / (n_pos * n_neg)
 
 
-class RegressionMetrics:
+class RegressionMetric:
 
-    def mae(self, y_true, y_pred):
+    @staticmethod
+    def mae(y_true, y_pred):
         return np.mean(np.abs(y_true - y_pred))
 
-    def mse(self, y_true, y_pred):
+    @staticmethod
+    def mse(y_true, y_pred):
         return np.mean((y_true - y_pred)**2)
 
-    def rmse(self, y_true, y_pred):
+    @staticmethod
+    def rmse(y_true, y_pred):
         return self.mse(y_true, y_pred)**.5
 
-    def mape(self, y_true, y_pred):
+    @staticmethod
+    def mape(y_true, y_pred):
         return np.mean(np.abs((y_true - y_pred) / y_true)) * 100
 
-    def r2(self, y_true, y_pred):
+    @staticmethod
+    def r2(y_true, y_pred):
         return 1 - (np.mean((y_true - y_pred)**2) / np.var(y_true))
+
+
+class Distance:
+
+    @staticmethod
+    def euclidean(arr1, arr2):
+        return np.sqrt(np.sum(np.square(arr1 - arr2), axis=-1))
+
+    @staticmethod
+    def manhattan(arr1, arr2):
+        return np.sum(np.abs(arr1 - arr2), axis=-1)
+
+    @staticmethod
+    def chebyshev(arr1, arr2):
+        return np.max(np.abs(arr1 - arr2), axis=-1)
+
+    @staticmethod
+    def cosine(arr1, arr2):
+        l2_norm = lambda x: np.sqrt(np.sum(np.square(x), axis=-1))
+        return 1 - np.sum(arr1 * arr2, axis=-1) / (l2_norm(arr1) * l2_norm(arr2))

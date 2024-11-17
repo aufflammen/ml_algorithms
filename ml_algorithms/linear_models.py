@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 
-from .metrics import *
+from .metrics import ClassificationMetric, RegressionMetric
 
 
 class BaseLinear:
@@ -43,7 +43,7 @@ class BaseLinear:
         return f'{self.__class__.__name__}: n_iter={self.n_iter}, learning_rate={self.learning_rate}'
 
 
-class LinearRegression(BaseLinear, RegressionMetrics):
+class LinearRegression(BaseLinear, RegressionMetric):
     """
     Parameters
     ----------
@@ -137,7 +137,7 @@ class LinearRegression(BaseLinear, RegressionMetrics):
         return X @ self.weights
 
 
-class LogisticRegression(BaseLinear, ClassificationMetrics):
+class LogisticRegression(BaseLinear, ClassificationMetric):
     """
     Parameters
     ----------
