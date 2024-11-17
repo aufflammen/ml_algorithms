@@ -16,7 +16,7 @@ class BaseKNN:
         return k_nearest_targets, k_nearest_distances
 
     def __str__(self):
-        return f'{self.__class__.__name__} class: k={self.k}'
+        return f'{self.__class__.__name__}: k={self.k}'
 
 
 # KNNRegressor
@@ -94,12 +94,12 @@ class KNNClassifier(BaseKNN):
             proba /= np.sum(weights)
 
         elif self.weight == 'distance':
-            weight = 1 / (k_nearest_distances + 1e-12)
+            weights = 1 / (k_nearest_distances + 1e-12)
             proba = np.zeros((n_samples, self.n_classes))
             for i in range(n_samples):
                 for j in range(self.k):
-                    proba[i, k_nearest_targets[i, j]] += weight[i, j]
-            proba /= np.sum(weight, axis=1)[:, np.newaxis]
+                    proba[i, k_nearest_targets[i, j]] += weights[i, j]
+            proba /= np.sum(weights, axis=1)[:, np.newaxis]
 
         else:
             raise ValueError("Parameter 'weight' can be {'uniform', 'rank', 'distance'}")

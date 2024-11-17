@@ -132,7 +132,7 @@ class LinearRegression(BaseLinear, RegressionMetric):
             y_pred = X @ self.weights
             self.best_score = self._get_score(y, y_pred)
     
-    def predict(self, X: pd.DataFrame) -> np.array:
+    def predict(self, X: pd.DataFrame) -> np.ndarray:
         X = self._to_numpy_with_bias(X)
         return X @ self.weights
 
@@ -187,17 +187,17 @@ class LogisticRegression(BaseLinear, ClassificationMetric):
     def _sigmoid(x) -> float:
         return 1 / (1 + np.exp(-x))
     
-    def _get_score(self, y_true, y_pred_logits) -> float:
+    def _get_score(self, y_true, y_pred_proba) -> float:
         if self.metric == 'roc_auc':
-            return self.roc_auc(y_true, y_pred_logits)
+            return self.roc_auc(y_true, y_pred_proba)
         else:
-            y_pred = (y_pred_logits > .5).astype(int)
+            y_pred = (y_pred_proba > .5).astype(int)
             return getattr(self, self.metric)(y_true, y_pred)
 
-    def _verbose_view(self, y_true, y_pred_logits, loss_penalty, step, lr) -> str:
-        loss = self.logloss(y_true, y_pred_logits) + loss_penalty
+    def _verbose_view(self, y_true, y_pred_proba, loss_penalty, step, lr) -> str:
+        loss = self.logloss(y_true, y_pred_proba) + loss_penalty
         if self.metric:
-            metric = self._get_score(y_true, y_pred_logits)
+            metric = self._get_score(y_true, y_pred_proba)
             print(f'{step} | lr: {lr:.4f} | loss: {loss:.4f} | {self.metric}: {metric:.4f}')
         else:
             print(f'{step} | lr: {lr:.4f} | loss: {loss:.4f}')
@@ -215,28 +215,28 @@ class LogisticRegression(BaseLinear, ClassificationMetric):
             sample_idx = np.random.choice(n_samples, sample_size, replace=False)
             X_sample, y_sample = X[sample_idx], y[sample_idx]
             # Prediction
-            y_pred_logits = self._sigmoid(X_sample @ self.weights)
+            y_pred_proba = self._sigmoid(X_sample @ self.weights)
             # Regularization
             loss_penalty, grad_penalty = getattr(self, '_reg_' + self.reg)() if self.reg else (0, 0)
             # Gradient descent
-            dw = 1 / sample_size * (y_pred_logits - y_sample) @ X_sample + grad_penalty
+            dw = 1 / sample_size * (y_pred_proba - y_sample) @ X_sample + grad_penalty
             # Проверяем lr функция или число
             lr = self.learning_rate(i) if callable(self.learning_rate) else self.learning_rate
             self.weights -= lr * dw
 
             # Отображение лога обучения
             if verbose and (i % verbose == 0 or i == 1 or i == self.n_iter):
-                self._verbose_view(y_sample, y_pred_logits, loss_penalty, i, lr)
+                self._verbose_view(y_sample, y_pred_proba, loss_penalty, i, lr)
 
         # Рассчитываем метрику после завершения обучения
         if self.metric:
-            y_pred_logits = self._sigmoid(X @ self.weights)
-            self.best_score = self._get_score(y, y_pred_logits)
+            y_pred_proba = self._sigmoid(X @ self.weights)
+            self.best_score = self._get_score(y, y_pred_proba)
 
-    def predict_proba(self, X: pd.DataFrame) -> np.array:
+    def predict_proba(self, X: pd.DataFrame) -> np.ndarray:
         X = self._to_numpy_with_bias(X)
         return self._sigmoid(X @ self.weights)
 
-    def predict(self, X: pd.DataFrame) -> np.array:
-        logits = self.predict_proba(X)
-        return (logits > .5).astype(int)
+    def predict(self, X: pd.DataFrame) -> np.ndarray:
+        y_pred_proba = self.predict_proba(X)
+        return (y_pred_proba > .5).astype(int)

@@ -19,10 +19,10 @@ class ClassificationMetric:
         return matrix
 
     @staticmethod
-    def logloss(y_true, y_pred_logits):
+    def logloss(y_true, y_pred_proba):
         eps = 1e-12
-        y_pred_logits = np.clip(y_pred_logits, eps, 1)
-        return -np.mean(y_true * np.log(y_pred_logits) + (1 - y_true) * np.log(1 - y_pred_logits))
+        y_pred_proba = np.clip(y_pred_proba, eps, 1)
+        return -np.mean(y_true * np.log(y_pred_proba) + (1 - y_true) * np.log(1 - y_pred_proba))
 
     @staticmethod
     def accuracy(y_true, y_pred):

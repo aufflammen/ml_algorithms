@@ -8,7 +8,7 @@
 - LogisticRegression
 
 **Метрические алгоритмы:**
-- <s>KNNRegressor</s>
+- KNNRegressor
 - KNNClassifier
 
 **Деревья решений:**
