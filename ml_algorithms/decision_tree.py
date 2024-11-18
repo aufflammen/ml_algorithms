@@ -1,8 +1,6 @@
 import numpy as np
 import pandas as pd
 
-from .metrics import *
-
 
 class TreeNode:
     def __init__(self):
@@ -18,6 +16,65 @@ class TreeNode:
 
 
 class BaseDecisionTree:
+
+    def __init__(
+        self, 
+        max_depth=5,
+        min_samples_split=2,
+        max_leafs=20,
+        bins=None
+    ):
+        self.tree_task = 'regression'
+        self.max_depth = max_depth
+        self.min_samples_split = min_samples_split
+        self.max_leafs = max_leafs
+        self.bins = bins
+
+        self.root = None
+        self.leafs_cnt = 1
+        self.features = None
+        self.n_features = None
+        self.n_samples_train = None
+        self.fi = None # Feature importance
+        self._criterion_func = self._criterion_mse
+        self._validate_parameters()
+
+    def _validate_parameters(self) -> None:
+        if self.bins and self.bins < 3:
+            raise ValueError('Parameter `bins` must be in the range `[3, inf)`')
+
+    def _criterion_mse(self, sample: np.ndarray) -> float:
+        return np.mean(np.square(sample - np.mean(sample)))
+
+    def _criterion_entropy(self, sample: np.ndarray) -> float:
+        eps = 1e-12
+        _, counts = np.unique(sample, return_counts=True)
+        probabilities = np.clip(counts / np.sum(counts), eps, 1)
+        return -(probabilities @ np.log2(probabilities))
+
+    def _criterion_gini(self, sample: np.ndarray) -> float:
+        _, counts = np.unique(sample, return_counts=True)
+        probabilities = np.square(counts / np.sum(counts))
+        return 1 - np.sum(probabilities)
+
+    def fit(self, X: pd.DataFrame, y: pd.Series) -> None:
+        self.features = X.columns
+        self.n_features = len(self.features)
+        self.n_samples_train = X.shape[0]
+        self.fi = {k: 0 for k in self.features}
+        X, y = X.to_numpy(), y.to_numpy()
+
+        if self.tree_task == 'classification':
+            self.classes = np.unique(y)
+            self.class_to_idx = {v: k for k, v in enumerate(self.classes)}
+            self.n_classes = len(self.classes)
+
+        if self.bins:
+            self.thresholds_bins = []
+            for feature_idx in range(self.n_features):
+                self.thresholds_bins.append(np.histogram(X[:, feature_idx], bins=self.bins)[1][1:-1])
+        
+        self.root = self._build_tree(TreeNode(), X, y, depth=0)
 
     # Рекурсивное построение дерева
     def _build_tree(self, node: TreeNode, X: np.ndarray, y: np.ndarray, depth: int):
@@ -74,7 +131,7 @@ class BaseDecisionTree:
 
     # Поиск наилучшего разбиения
     def _get_best_split(self, X: np.ndarray, y: np.ndarray):
-        best_criterion = begin_criterion = self._criterion_func(y) # энтропия до разделения
+        best_criterion = begin_criterion = self._criterion_func(y) # критерий до разделения
         best_feature_idx = best_threshold = best_information_gain = None
     
         for feature_idx in range(self.n_features):
@@ -109,11 +166,34 @@ class BaseDecisionTree:
                     
         return best_feature_idx, best_threshold, best_information_gain
 
+    def _traverse(
+        self, 
+        node: TreeNode, 
+        leaf_func,
+        indices: np.ndarray
+    ):
+        if node.is_leaf:
+            leaf_func(node, indices)
+            return
+
+        if node.left:
+            left_indices = indices[self.X_test[indices, node.feature_idx] <= node.threshold]
+            self._traverse(node.left, leaf_func, left_indices)
+        if node.right:
+            right_indices = indices[self.X_test[indices, node.feature_idx] > node.threshold]
+            self._traverse(node.right, leaf_func, right_indices)
+
+    def _prepare_test_data(self, X: pd.DataFrame) -> np.ndarray:
+        # Устанавливаем такой же порядок признаков, как в обучающей выборке 
+        return X[self.features].to_numpy()
+
     # Вывод структуры построенного дерева
     def print_tree(self) -> str:
         # Рекурсивная функция для обхода дерева
         def traverse_print_tree(node, parent=None, depth=1):
-            criterion_info = f"{self.criterion}: {node.criterion:<8.4f} {node.value.tolist() if self.tree_task == 'classification' else ''}"
+            criterion_name = self._criterion_func.__name__.removeprefix('_criterion_')
+            value_repr = node.value.tolist() if self.tree_task == 'classification' else ''
+            criterion_info = f"{criterion_name}: {node.criterion:<8.4f} {value_repr}"
             if not node.is_leaf:
                 print(f"{'-' * depth + str(self.features[node.feature_idx]):<25} > {node.threshold:<10.4f} {criterion_info}")
                 if node.left is not None:
@@ -147,67 +227,16 @@ class DecisionTreeRegressor(BaseDecisionTree):
         Values must be in the range `[3, inf)`.
     """
 
-    def __init__(
-        self, 
-        max_depth=5,
-        min_samples_split=2,
-        max_leafs=20,
-        bins=None
-    ):
-        self.tree_task = 'regression'
-        self.criterion = 'mse'
-        self.max_depth = max_depth
-        self.min_samples_split = min_samples_split
-        self.max_leafs = max_leafs
-        self.leafs_cnt = 1
-        self.bins = bins
-
-        self.root = None
-        self.features = None
-        self.n_features = None
-        self.n_samples_train = None
-        self.fi = None # Feature importance
-        self._criterion_func = self._mse
-
-        if self.bins and self.bins < 3:
-            raise ValueError('Parameter `bins` must be in the range `[3, inf)`')
-
-    def fit(self, X: pd.DataFrame, y: pd.Series) -> None:
-        self.features = X.columns
-        self.n_features = len(self.features)
-        self.n_samples_train = X.shape[0]
-        self.fi = {k: 0 for k in self.features}
-        X, y = X.to_numpy(), y.to_numpy()
-
-        if self.bins:
-            self.thresholds_bins = []
-            for feature_idx in range(self.n_features):
-                self.thresholds_bins.append(np.histogram(X[:, feature_idx], bins=self.bins)[1][1:-1])
-        
-        self.root = self._build_tree(TreeNode(), X, y, depth=0)
-
     def predict(self, X: pd.DataFrame) -> np.ndarray:
-        def traverse(node, indices):
-            if node.is_leaf:
-                predict[indices] = node.value
-                return
+        self.X_test = self._prepare_test_data(X)
+        n_samples = self.X_test.shape[0]
+        pred = np.zeros(n_samples)
 
-            if node.left:
-                left_indices = indices[X[indices, node.feature_idx] <= node.threshold]
-                traverse(node.left, left_indices)
-            if node.right:
-                right_indices = indices[X[indices, node.feature_idx] > node.threshold]
-                traverse(node.right, right_indices)
-        
-        # Устанавливаем такой же порядок признаков, как в обучающей выборке 
-        X = X[self.features].to_numpy()
-        n_samples = X.shape[0]
-        predict = np.zeros(n_samples)
-        traverse(self.root, np.arange(n_samples))
-        return predict
+        def leaf_func(node, indices):
+            pred[indices] = node.value
 
-    def _mse(self, sample: np.ndarray) -> float:
-        return np.mean(np.square(sample - np.mean(sample)))
+        self._traverse(self.root, leaf_func, np.arange(n_samples))
+        return pred
         
 
 class DecisionTreeClassifier(BaseDecisionTree):
@@ -234,74 +263,25 @@ class DecisionTreeClassifier(BaseDecisionTree):
         max_leafs=20,
         bins=None
     ):
+        super().__init__(max_depth, min_samples_split, max_leafs, bins)
         self.tree_task = 'classification'
-        self.criterion = criterion
-        self.max_depth = max_depth
-        self.min_samples_split = min_samples_split
-        self.max_leafs = max_leafs
-        self.leafs_cnt = 1
-        self.bins = bins
-        
-        self.root = None
-        self.features = None
-        self.n_features = None
-        self.n_samples_train = None
-        self.fi = None # Feature importance
+        self._criterion_func = getattr(self, '_criterion_' + criterion)
+
         self.classes = None
         self.class_to_idx = None
         self.n_classes = None
-        self._criterion_func = getattr(self, '_' + self.criterion)
 
-        if self.bins and self.bins < 3:
-            raise ValueError('Parameter `bins` must be in the range `[3, inf)`')
+    def predict_proba(self, X: pd.DataFrame) -> np.ndarray:       
+        self.X_test = self._prepare_test_data(X)
+        n_samples = self.X_test.shape[0]
+        proba = np.zeros((n_samples, self.n_classes))
 
-    def fit(self, X: pd.DataFrame, y: pd.Series) -> None:
-        self.features = X.columns
-        self.n_features = len(self.features)
-        self.n_samples_train = X.shape[0]
-        self.fi = {k: 0 for k in self.features}
-        self.classes = np.unique(y)
-        self.class_to_idx = {v: k for k, v in enumerate(self.classes)}
-        self.n_classes = len(self.classes)
-        X, y = X.to_numpy(), y.to_numpy()
-
-        if self.bins:
-            self.thresholds_bins = []
-            for feature_idx in range(self.n_features):
-                self.thresholds_bins.append(np.histogram(X[:, feature_idx], bins=self.bins)[1][1:-1])
+        def leaf_func(node, indices):
+            proba[indices] = node.value / node.n_samples
         
-        self.root = self._build_tree(TreeNode(), X, y, depth=0)
-
-    def predict_proba(self, X: pd.DataFrame) -> np.ndarray:
-        def traverse(node, indices):
-            if node.is_leaf:
-                probs[indices] = node.value / node.n_samples
-                return
-
-            if node.left:
-                left_indices = indices[X[indices, node.feature_idx] <= node.threshold]
-                traverse(node.left, left_indices)
-            if node.right:
-                right_indices = indices[X[indices, node.feature_idx] > node.threshold]
-                traverse(node.right, right_indices)
-        
-        # Устанавливаем такой же порядок признаков, как в обучающей выборке 
-        X = X[self.features].to_numpy()
-        n_samples = X.shape[0]
-        probs = np.zeros((n_samples, self.n_classes))
-        traverse(self.root, np.arange(n_samples))
-        return probs[:, 1]
+        self._traverse(self.root, leaf_func, np.arange(n_samples))
+        return proba[:, 1]
 
     def predict(self, X: pd.DataFrame) -> np.ndarray:
         return (self.predict_proba(X) > .5).astype(int)
         
-    def _entropy(self, sample: np.ndarray) -> float:
-        eps = 1e-12
-        _, counts = np.unique(sample, return_counts=True)
-        probabilities = np.clip(counts / np.sum(counts), eps, 1)
-        return -(probabilities @ np.log2(probabilities))
-
-    def _gini(self, sample: np.ndarray) -> float:
-        _, counts = np.unique(sample, return_counts=True)
-        probabilities = np.square(counts / np.sum(counts))
-        return 1 - np.sum(probabilities)
