@@ -25,6 +25,8 @@ class BaseDecisionTree:
         bins=None
     ):
         self.tree_task = 'regression'
+        self._criterion_func = self._criterion_mse
+
         self.max_depth = max_depth
         self.min_samples_split = min_samples_split
         self.max_leafs = max_leafs
@@ -34,9 +36,8 @@ class BaseDecisionTree:
         self.leafs_cnt = 1
         self.features = None
         self.n_features = None
-        self.n_samples_train = None
+        self.n_samples = None
         self.fi = None # Feature importance
-        self._criterion_func = self._criterion_mse
         self._validate_parameters()
 
     def _validate_parameters(self) -> None:
@@ -60,8 +61,11 @@ class BaseDecisionTree:
     def fit(self, X: pd.DataFrame, y: pd.Series) -> None:
         self.features = X.columns
         self.n_features = len(self.features)
-        self.n_samples_train = X.shape[0]
         self.fi = {k: 0 for k in self.features}
+        # Оставляем возможность доопределить n_samples заранее 
+        # для корректного подсчета важности фичей в ансамбле
+        if self.n_samples is None:
+            self.n_samples = X.shape[0] 
         X, y = X.to_numpy(), y.to_numpy()
 
         if self.tree_task == 'classification':
@@ -72,7 +76,9 @@ class BaseDecisionTree:
         if self.bins:
             self.thresholds_bins = []
             for feature_idx in range(self.n_features):
-                self.thresholds_bins.append(np.histogram(X[:, feature_idx], bins=self.bins)[1][1:-1])
+                self.thresholds_bins.append(
+                    np.histogram(X[:, feature_idx], bins=self.bins)[1][1:-1]
+                )
         
         self.root = self._build_tree(TreeNode(), X, y, depth=0)
 
@@ -93,7 +99,8 @@ class BaseDecisionTree:
         node.n_samples = len(y)
         node.criterion = self._criterion_func(y)
         
-        # Условие остановки ветвления: проверяем, достигли ли мы максимальной глубины или минимального числа листьев
+        # Условие остановки ветвления: проверяем, достигли ли мы максимальной глубины 
+        # или минимального числа листьев
         if any((
             depth >= self.max_depth, 
             self.leafs_cnt >= max(2, self.max_leafs), 
@@ -120,7 +127,7 @@ class BaseDecisionTree:
         right_X, right_y = X[right_indices], y[right_indices]
 
         # Обновление списка важности признаков
-        fi = (len(left_y) + len(right_y)) * information_gain / self.n_samples_train
+        fi = (len(left_y) + len(right_y)) * information_gain / self.n_samples
         self.fi[self.features[feature_idx]] += fi 
         
         # Рекурсивно строим поддеревья для каждого разбиения
@@ -143,7 +150,8 @@ class BaseDecisionTree:
                 thresholds = self.thresholds_bins[feature_idx]
             else:
                 # В качестве порогов для разбиения берем среднее между каждой парой значений
-                thresholds = np.convolve(unique_feature_values, [.5, .5], mode='valid')   # аналог (a[:-1] + a[1:]) / 2
+                # аналог (a[:-1] + a[1:]) / 2
+                thresholds = np.convolve(unique_feature_values, [.5, .5], mode='valid')
     
             for threshold in thresholds:
                 left_indices = X_current_feature <= threshold
@@ -155,7 +163,9 @@ class BaseDecisionTree:
                 if len_left == 0 or len_right == 0:
                     continue
 
-                criterion_split = (len_left * self._criterion_func(left_y) + len_right * self._criterion_func(right_y)) / len_total
+                criterion_split = (
+                    len_left * self._criterion_func(left_y) + \
+                    len_right * self._criterion_func(right_y)) / len_total
 
                 # проверяем, уменьшает ли текущее разделение энтропию
                 if best_criterion > criterion_split:
@@ -195,22 +205,28 @@ class BaseDecisionTree:
             value_repr = node.value.tolist() if self.tree_task == 'classification' else ''
             criterion_info = f"{criterion_name}: {node.criterion:<8.4f} {value_repr}"
             if not node.is_leaf:
-                print(f"{'-' * depth + str(self.features[node.feature_idx]):<25} > {node.threshold:<10.4f} {criterion_info}")
+                feature = str(self.features[node.feature_idx])
+                print(f"{'-' * depth + feature:<25} > {node.threshold:<10.4f} {criterion_info}")
                 if node.left is not None:
                     traverse_print_tree(node.left, 'left', depth + 1)
                 if node.right is not None:
                     traverse_print_tree(node.right, 'right', depth + 1)
             else:
                 if self.tree_task == 'classification':
-                    leaf_info = f"{'-' * depth + 'leaf_' + parent:<25} = {self.classes[np.argmax(node.value)]:<10} {criterion_info}"
+                    val = self.classes[np.argmax(node.value)]
                 else:
-                    leaf_info = f"{'-' * depth + 'leaf_' + parent:<25} = {node.value:<10.4f} {criterion_info}"
-                print(leaf_info)
+                    val = round(node.value, 4)
+                print(f"{'-' * depth + 'leaf_' + parent:<25} = {val:<10} {criterion_info}")
 
         return traverse_print_tree(self.root)
 
     def __str__(self) -> str:
-        return f'{self.__class__.__name__}: max_depth={self.max_depth}, min_samples_split={self.min_samples_split}, max_leafs={self.max_leafs}'
+        return (
+            f'{self.__class__.__name__}: '
+            f'max_depth={self.max_depth}, '
+            f'min_samples_split={self.min_samples_split}, '
+            f'max_leafs={self.max_leafs}'
+        )
 
 
 class DecisionTreeRegressor(BaseDecisionTree):

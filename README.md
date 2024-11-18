@@ -15,4 +15,7 @@
 - DecisionTreeRegressor
 - DecisionTreeClassifier
 
+**Ансамбли**
+- RandomForestRegressor
+
 **+** *Различные популярные метрики для регрессии и классификации*

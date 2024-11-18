@@ -40,7 +40,10 @@ class BaseLinear:
         return self.best_score
 
     def __str__(self):
-        return f'{self.__class__.__name__}: n_iter={self.n_iter}, learning_rate={self.learning_rate}'
+        return (
+            f'{self.__class__.__name__}: '
+            f'n_iter={self.n_iter}, learning_rate={self.learning_rate}'
+        )
 
 
 class LinearRegression(BaseLinear, RegressionMetric):
@@ -106,7 +109,10 @@ class LinearRegression(BaseLinear, RegressionMetric):
         # Инициализируем вектор весов
         self.weights = np.ones(n_features)
         # Вычисляем количество элементов для sgd
-        sample_size = int(n_samples * self.sgd_sample) if self.sgd_sample and self.sgd_sample <= 1 else (self.sgd_sample or n_samples)
+        sample_size = (
+            int(n_samples * self.sgd_sample) if self.sgd_sample and self.sgd_sample <= 1 
+            else (self.sgd_sample or n_samples)
+        )
         np.random.seed(self.random_state)
         
 
@@ -208,7 +214,10 @@ class LogisticRegression(BaseLinear, ClassificationMetric):
         # Инициализируем вектор весов
         self.weights = np.ones(n_features)
         # Вычисляем количество элементов для sgd
-        sample_size = int(n_samples * self.sgd_sample) if self.sgd_sample and self.sgd_sample <= 1 else (self.sgd_sample or n_samples)
+        sample_size = (
+            int(n_samples * self.sgd_sample) if self.sgd_sample and self.sgd_sample <= 1 
+            else (self.sgd_sample or n_samples)
+        )
         np.random.seed(self.random_state)
 
         for i in range(1, self.n_iter+1):

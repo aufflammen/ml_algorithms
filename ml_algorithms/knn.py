@@ -27,9 +27,6 @@ class BaseKNN:
         """
         return np.expand_dims(X[self.features].to_numpy(), axis=expand_dims)
 
-    def _prepare_targets(self, y: pd.Series) -> np.ndarray:
-        return y.to_numpy()
-
     def fit(self, X: pd.DataFrame, y: pd.Series) -> None:
         self.train_size = X.shape
         self.features = X.columns
@@ -42,19 +39,27 @@ class BaseKNN:
         distances = self.metric(self.X_train, X_test).T
         nearest_indices = np.argsort(distances, axis=1)[:, :self.k]
         nearest_targets = self.y_train[nearest_indices]
-        # Для корректной индексации многомерным массивом создадим вспомогательный вектор столбец
+        # Для корректной индексации многомерным массивом 
+        # создадим вспомогательный вектор столбец
         row_indices = np.arange(nearest_indices.shape[0])[:, np.newaxis]
         nearest_distances = distances[row_indices, nearest_indices]
         return nearest_targets, nearest_distances
 
     def _validate_parameters(self) -> None:
         if self.k > self.train_size[0]:
-            raise ValueError("Parameter 'k' cannot be greater than the number of training samples.")
+            raise ValueError(
+                "Parameter 'k' cannot be greater than the number of training samples."
+            )
         if self.weight not in {'uniform', 'rank', 'distance'}:
-            raise ValueError("Parameter 'weight' must be one of {'uniform', 'rank', 'distance'}.")
+            raise ValueError(
+                "Parameter 'weight' must be one of {'uniform', 'rank', 'distance'}."
+            )
 
     def __str__(self) -> str:
-        return f'{self.__class__.__name__}: k={self.k}, metric={self.metric.__name__}, weight={self.weight}'
+        return (
+            f'{self.__class__.__name__}: '
+            f'k={self.k}, metric={self.metric.__name__}, weight={self.weight}'
+        )
 
 
 class KNNRegressor(BaseKNN):
@@ -67,6 +72,9 @@ class KNNRegressor(BaseKNN):
 
     weight : {'uniform', 'rank', 'distance'}, default='uniform'
     """
+
+    def _prepare_targets(self, y: pd.Series) -> np.ndarray:
+        return y.to_numpy()
 
     def predict(self, X_test: pd.DataFrame) -> np.ndarray:
         n_samples = X_test.shape[0]
@@ -84,7 +92,8 @@ class KNNRegressor(BaseKNN):
         elif self.weight == 'distance':
             weights = 1 / np.maximum(nearest_distances, 1e-12)
             weights /= np.sum(weights, axis=1)[:, np.newaxis]
-            pred = np.einsum('ij,ij->i', nearest_targets, weights) # аналог np.sum(nearest_targets * weights, axis=1)
+            # аналог np.sum(nearest_targets * weights, axis=1)
+            pred = np.einsum('ij,ij->i', nearest_targets, weights)
 
         return pred
 
@@ -142,3 +151,4 @@ class KNNClassifier(BaseKNN):
     def predict(self, X_test: pd.DataFrame) -> np.ndarray:
         pred_proba = self.predict_proba(X_test)
         return self.classes[np.argmax(pred_proba, axis=1)]
+        
