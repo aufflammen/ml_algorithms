@@ -77,7 +77,7 @@ class RegressionMetric:
 
     @staticmethod
     def rmse(y_true, y_pred):
-        return self.mse(y_true, y_pred)**.5
+        return RegressionMetric.mse(y_true, y_pred)**.5
 
     @staticmethod
     def mape(y_true, y_pred):
