@@ -3,10 +3,16 @@ import pandas as pd
 import random
 from collections import Counter
 
+from .base import *
 from .decision_tree import DecisionTreeRegressor, DecisionTreeClassifier
 from .metrics import get_score
 
-class BaseRandomForest:
+
+# ------------------------------------
+# RandomForest
+# ------------------------------------
+
+class BaseRandomForest(BaseModel):
 
     def __init__(
         self, 
@@ -103,24 +109,6 @@ class BaseRandomForest:
             pred += getattr(model, method)(X)
         return pred / self.n_estimators
 
-    def __str__(self) -> str:
-        valid_params = set([
-            'n_estimators', 
-            'max_features', 
-            'max_samples',  
-            'max_depth', 
-            'min_samples_split', 
-            'max_leafs', 
-            'bins',
-            'random_state',
-            'criterion'
-            ])
-
-        params_print = ', '.join(
-            f'{k}={v}' for k, v in self.__dict__.items() if k in valid_params
-        )
-        return f'{self.__class__.__name__} class: {params_print}'
-
 
 class RandomForestRegressor(BaseRandomForest):
 
@@ -137,7 +125,7 @@ class RandomForestRegressor(BaseRandomForest):
         return self._get_predict(X, method='predict')
 
 
-class MyForestClf(BaseRandomForest):
+class RandomForestClassifier(BaseRandomForest):
     
     def __init__(
         self, 
@@ -193,4 +181,33 @@ class MyForestClf(BaseRandomForest):
             pred = self._get_predict(X, method='predict')
 
         return self._logits_to_class(pred)
+
+
+# ------------------------------------
+# Boosting
+# ------------------------------------
+
+class BaseGradientBoosting(BaseModel):
+    pass
+
+
+#GradientBoostingRegressor
+class MyBoostReg(BaseGradientBoosting):
+
+    def __init__(
+        self, 
+        n_estimators=10,
+        learning_rate=.1,
+        max_depth=5,
+        min_samples_split=2,
+        max_leafs=20,
+        bins=16
+    ):
+        self.n_estimators = n_estimators
+        self.learning_rate = learning_rate
+        self.max_depth = max_depth
+        self.min_samples_split = min_samples_split
+        self.max_leafs = max_leafs
+        self.bins = bins
+
 

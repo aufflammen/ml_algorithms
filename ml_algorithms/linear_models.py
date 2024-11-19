@@ -1,10 +1,11 @@
 import numpy as np
 import pandas as pd
 
+from .base import *
 from .metrics import get_score, mean_squared_error, log_loss
 
 
-class BaseLinear:
+class BaseLinear(BaseModel):
 
     def __init__(
         self, 
@@ -114,12 +115,6 @@ class BaseLinear:
 
     def get_best_score(self) -> float:
         return self.best_score
-
-    def __str__(self) -> str:
-        return (
-            f'{self.__class__.__name__}: '
-            f'n_iter={self.n_iter}, learning_rate={self.learning_rate}'
-        )
 
 
 class LinearRegression(BaseLinear):
@@ -251,3 +246,4 @@ class LogisticRegression(BaseLinear):
     def predict(self, X: pd.DataFrame) -> np.ndarray:
         y_pred_proba = self.predict_proba(X)
         return self._logits_to_class(y_pred_proba)
+        

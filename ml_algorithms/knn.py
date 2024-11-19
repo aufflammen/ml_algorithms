@@ -1,10 +1,11 @@
 import numpy as np
 import pandas as pd
 
+from .base import *
 from .metrics import Distance
 
 
-class BaseKNN:
+class BaseKNN(BaseModel):
 
     def __init__(
         self, 
@@ -54,12 +55,6 @@ class BaseKNN:
             raise ValueError(
                 "Parameter 'weight' must be one of {'uniform', 'rank', 'distance'}."
             )
-
-    def __str__(self) -> str:
-        return (
-            f'{self.__class__.__name__}: '
-            f'k={self.k}, metric={self.metric.__name__}, weight={self.weight}'
-        )
 
 
 class KNNRegressor(BaseKNN):

@@ -1,6 +1,8 @@
 import numpy as np
 import pandas as pd
 
+from .base import *
+
 
 class TreeNode:
     def __init__(self):
@@ -15,7 +17,7 @@ class TreeNode:
         self.is_leaf = True
 
 
-class BaseDecisionTree:
+class BaseDecisionTree(BaseModel):
 
     def __init__(
         self, 
@@ -217,14 +219,6 @@ class BaseDecisionTree:
 
         return traverse_print_tree(self.root)
 
-    def __str__(self) -> str:
-        return (
-            f'{self.__class__.__name__}: '
-            f'max_depth={self.max_depth}, '
-            f'min_samples_split={self.min_samples_split}, '
-            f'max_leafs={self.max_leafs}'
-        )
-
 
 class DecisionTreeRegressor(BaseDecisionTree):
     """
@@ -317,4 +311,3 @@ class DecisionTreeClassifier(BaseDecisionTree):
 
     def predict(self, X: pd.DataFrame) -> np.ndarray:
         return (self.predict_proba(X) > .5).astype(int)
-        

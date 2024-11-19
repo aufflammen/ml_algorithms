@@ -143,4 +143,5 @@ def get_score(metric):
         score = metric
     else:
         raise ValueError(f'Parameter must be either a str or func.')
+
     return score
