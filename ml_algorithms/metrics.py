@@ -44,11 +44,14 @@ def log_loss(y_true, y_pred):
     return -np.mean(y_true * np.log(y_pred) + (1 - y_true) * np.log(1 - y_pred))
 
 def roc_auc_score(y_true, y_pred):
-    sorted_indices = np.argsort(y_pred)[::-1]
+    sorted_indices = np.argsort(-y_pred)
     y_true_sorted = y_true[sorted_indices]
 
     n_pos = np.sum(y_true_sorted == 1)
     n_neg = np.sum(y_true_sorted == 0)
+
+    if n_pos == 0 or n_neg == 0:
+        raise ValueError('Only one class present in y_true. ROC AUC score is not defined in that case.')
     
     tp = auc = 0
 

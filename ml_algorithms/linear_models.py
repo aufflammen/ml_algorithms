@@ -54,7 +54,7 @@ class BaseLinear:
         else:
             return X
 
-    def _get_sample_size(self, n_samples):
+    def _get_sample_size(self, n_samples: int) -> int:
         if self.sgd_sample and self.sgd_sample <= 1:
             return int(n_samples * self.sgd_sample)
         else:
@@ -108,14 +108,14 @@ class BaseLinear:
         loss_penalty_l2, grad_penalty_l2 = self._reg_l2()
         return loss_penalty_l1 + loss_penalty_l2, grad_penalty_l1 + grad_penalty_l2
 
-    def get_coef(self):
+    def get_coef(self) -> np.ndarray:
         if self.weights is not None:
             return self.weights[1:]
 
-    def get_best_score(self):
+    def get_best_score(self) -> float:
         return self.best_score
 
-    def __str__(self):
+    def __str__(self) -> str:
         return (
             f'{self.__class__.__name__}: '
             f'n_iter={self.n_iter}, learning_rate={self.learning_rate}'
@@ -170,10 +170,10 @@ class LinearRegression(BaseLinear):
         self._loss = mean_squared_error
 
     @staticmethod
-    def _get_gradient(X, y_true, y_pred, sample_size, grad_penalty):
+    def _get_gradient(X, y_true, y_pred, sample_size, grad_penalty) -> float:
         return 2 / sample_size * X.T @ (y_pred - y_true) + grad_penalty
 
-    def _get_predict(self, X):
+    def _get_predict(self, X: np.ndarray) -> np.ndarray:
         return X @ self.weights
     
     def predict(self, X: pd.DataFrame) -> np.ndarray:
@@ -226,7 +226,7 @@ class LogisticRegression(BaseLinear):
             sgd_sample=sgd_sample,
             random_state=random_state
         )
-        self._need_convert_logits = False if metric in set(('roc_auc', 'logloss')) else True
+        self._need_convert_logits = False if metric in {'roc_auc', 'logloss'} else True
         self._loss = log_loss
 
     @staticmethod
@@ -234,14 +234,14 @@ class LogisticRegression(BaseLinear):
         return 1 / (1 + np.exp(-x))
 
     @staticmethod
-    def _get_gradient(X, y_true, y_pred, sample_size, grad_penalty):
+    def _get_gradient(X, y_true, y_pred, sample_size, grad_penalty) -> float:
         return 1 / sample_size * (y_pred - y_true) @ X + grad_penalty
 
     @staticmethod
-    def _logits_to_class(y_pred):
+    def _logits_to_class(y_pred: np.ndarray) -> np.ndarray:
         return (y_pred > .5).astype(int)
 
-    def _get_predict(self, X):
+    def _get_predict(self, X: np.ndarray) -> np.ndarray:
         return self._sigmoid(X @ self.weights)
 
     def predict_proba(self, X: pd.DataFrame) -> np.ndarray:

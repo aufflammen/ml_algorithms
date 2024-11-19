@@ -24,9 +24,6 @@ class BaseDecisionTree:
         max_leafs=20,
         bins=None
     ):
-        self.tree_task = 'regression'
-        self._criterion_func = self._criterion_mse
-
         self.max_depth = max_depth
         self.min_samples_split = min_samples_split
         self.max_leafs = max_leafs
@@ -68,7 +65,7 @@ class BaseDecisionTree:
             self.n_samples = X.shape[0] 
         X, y = X.to_numpy(), y.to_numpy()
 
-        if self.tree_task == 'classification':
+        if self.model_task == 'classification':
             self.classes = np.unique(y)
             self.class_to_idx = {v: k for k, v in enumerate(self.classes)}
             self.n_classes = len(self.classes)
@@ -84,7 +81,7 @@ class BaseDecisionTree:
 
     # Рекурсивное построение дерева
     def _build_tree(self, node: TreeNode, X: np.ndarray, y: np.ndarray, depth: int):
-        if self.tree_task == 'classification':
+        if self.model_task == 'classification':
             values, counts = np.unique(y, return_counts=True)
             node.value = np.zeros(self.n_classes, dtype=int)
             # Для каждого уникального класса указываем количество его экземпляров
@@ -105,7 +102,7 @@ class BaseDecisionTree:
             depth >= self.max_depth, 
             self.leafs_cnt >= max(2, self.max_leafs), 
             len(y) < self.min_samples_split, 
-            len(np.unique(y)) == 1 if self.tree_task == 'classification' else False
+            len(np.unique(y)) == 1 if self.model_task == 'classification' else False
         )):
             return node
 
@@ -202,7 +199,7 @@ class BaseDecisionTree:
         # Рекурсивная функция для обхода дерева
         def traverse_print_tree(node, parent=None, depth=1):
             criterion_name = self._criterion_func.__name__.removeprefix('_criterion_')
-            value_repr = node.value.tolist() if self.tree_task == 'classification' else ''
+            value_repr = node.value.tolist() if self.model_task == 'classification' else ''
             criterion_info = f"{criterion_name}: {node.criterion:<8.4f} {value_repr}"
             if not node.is_leaf:
                 feature = str(self.features[node.feature_idx])
@@ -212,7 +209,7 @@ class BaseDecisionTree:
                 if node.right is not None:
                     traverse_print_tree(node.right, 'right', depth + 1)
             else:
-                if self.tree_task == 'classification':
+                if self.model_task == 'classification':
                     val = self.classes[np.argmax(node.value)]
                 else:
                     val = round(node.value, 4)
@@ -242,6 +239,22 @@ class DecisionTreeRegressor(BaseDecisionTree):
     bins : int, default=None
         Values must be in the range `[3, inf)`.
     """
+
+    def __init__(
+        self, 
+        max_depth=5,
+        min_samples_split=2,
+        max_leafs=20,
+        bins=None
+    ):
+        super().__init__(
+            max_depth=max_depth, 
+            min_samples_split=min_samples_split, 
+            max_leafs=max_leafs, 
+            bins=bins
+        )
+        self.model_task = 'regression'
+        self._criterion_func = self._criterion_mse
 
     def predict(self, X: pd.DataFrame) -> np.ndarray:
         self.X_test = self._prepare_test_data(X)
@@ -279,10 +292,14 @@ class DecisionTreeClassifier(BaseDecisionTree):
         max_leafs=20,
         bins=None
     ):
-        super().__init__(max_depth, min_samples_split, max_leafs, bins)
-        self.tree_task = 'classification'
+        super().__init__(
+            max_depth=max_depth, 
+            min_samples_split=min_samples_split, 
+            max_leafs=max_leafs, 
+            bins=bins
+        )
+        self.model_task = 'classification'
         self._criterion_func = getattr(self, '_criterion_' + criterion)
-
         self.classes = None
         self.class_to_idx = None
         self.n_classes = None
