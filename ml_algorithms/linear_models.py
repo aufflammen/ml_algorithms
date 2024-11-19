@@ -1,10 +1,47 @@
 import numpy as np
 import pandas as pd
 
-from .metrics import ClassificationMetric, RegressionMetric
+from .metrics import get_score, mean_squared_error, log_loss
 
 
 class BaseLinear:
+
+    def __init__(
+        self, 
+        n_iter=100, 
+        learning_rate=.1, 
+        metric=None,
+        reg = None,
+        l1_coef=0,
+        l2_coef=0,
+        sgd_sample=None,
+        random_state=None
+    ):
+        self.n_iter = n_iter
+        self.learning_rate = learning_rate
+        self.metric = metric
+        self.reg = reg
+        self.l1_coef = l1_coef
+        self.l2_coef = l2_coef
+        self.sgd_sample = sgd_sample
+        self.random_state = random_state
+        self.weights = None
+        self.best_score = None
+        self._need_convert_logits = False
+        self._score = None if metric is None else get_score(self.metric)
+
+    def _verbose_view(self, y_true, y_pred, loss_penalty, step, lr) -> str:
+        loss = self._loss(y_true, y_pred) + loss_penalty
+        if self.metric:
+            # Если выполняется задача классификации и метрика подразумевает работу
+            # с метками класса, а не логитами, то производим конвертацию
+            if self._need_convert_logits:
+                y_pred = self._logits_to_class(y_pred)
+            score = self._score(y_true, y_pred)
+            score_str = f' | {self.metric}: {score:.4f}'
+        else:
+            score_str = ''
+        print(f'{step} | lr: {lr:.4f} | loss: {loss:.4f}' + score_str)
 
     @staticmethod
     def _to_numpy_with_bias(X: pd.DataFrame, y: pd.Series=None):
@@ -16,6 +53,45 @@ class BaseLinear:
             return X, y
         else:
             return X
+
+    def _get_sample_size(self, n_samples):
+        if self.sgd_sample and self.sgd_sample <= 1:
+            return int(n_samples * self.sgd_sample)
+        else:
+            return self.sgd_sample or n_samples
+
+    def fit(self, X: pd.DataFrame, y: pd.Series, verbose=False) -> None:
+        X, y = self._to_numpy_with_bias(X, y)
+        n_samples, n_features = X.shape
+        # Инициализируем вектор весов
+        self.weights = np.ones(n_features)
+        # Вычисляем количество элементов для sgd
+        sample_size = self._get_sample_size(n_samples)
+        np.random.seed(self.random_state)
+        # Цикл обучения
+        for i in range(1, self.n_iter+1):
+            sample_idx = np.random.choice(n_samples, sample_size, replace=False)
+            X_sample, y_sample = X[sample_idx], y[sample_idx]
+            # Prediction
+            y_pred = self._get_predict(X_sample)
+            # Regularization
+            loss_penalty, grad_penalty = getattr(self, '_reg_' + self.reg)() if self.reg else (0, 0)
+            # Gradient descent
+            dw = self._get_gradient(X_sample, y_sample, y_pred, sample_size, grad_penalty)
+            # Проверяем - lr является функцией или числом
+            lr = self.learning_rate(i) if callable(self.learning_rate) else self.learning_rate
+            self.weights -= lr * dw
+
+            # Отображение лога обучения
+            if verbose and (i % verbose == 0 or i == 1 or i == self.n_iter):
+                self._verbose_view(y_sample, y_pred, loss_penalty, i, lr)
+
+        # Рассчитываем метрику после завершения обучения
+        if self.metric:
+            y_pred = self._get_predict(X)
+            if self._need_convert_logits:
+                y_pred = self._logits_to_class(y_pred)
+            self.best_score = self._score(y, y_pred)
 
     def _reg_l1(self):
         loss_penalty = self.l1_coef * np.sum(np.abs(self.weights))
@@ -46,7 +122,7 @@ class BaseLinear:
         )
 
 
-class LinearRegression(BaseLinear, RegressionMetric):
+class LinearRegression(BaseLinear):
     """
     Parameters
     ----------
@@ -75,75 +151,37 @@ class LinearRegression(BaseLinear, RegressionMetric):
         n_iter=100, 
         learning_rate=.1, 
         metric=None,
-        reg = None,
+        reg=None,
         l1_coef=0,
         l2_coef=0,
         sgd_sample=None,
         random_state=None
     ):
-        self.n_iter = n_iter
-        self.learning_rate = learning_rate
-        self.metric = metric
-        self.reg = reg
-        self.l1_coef = l1_coef
-        self.l2_coef = l2_coef
-        self.sgd_sample = sgd_sample
-        self.random_state = random_state
-        self.weights = None
-        self.best_score = None
-
-    def _get_score(self, y_true, y_pred) -> float:
-        return getattr(self, self.metric)(y_true, y_pred)
-
-    def _verbose_view(self, y_true, y_pred, loss_penalty, step, lr) -> str:
-        loss = self.mse(y_true, y_pred) + loss_penalty
-        if self.metric:
-            metric = self._get_score(y_true, y_pred)
-            print(f'{step} | lr: {lr:.4f} | loss: {loss:.4f} | {self.metric}: {metric:.4f}')
-        else:
-            print(f'{step} | lr: {lr:.4f} | loss: {loss:.4f}')
-        
-    def fit(self, X: pd.DataFrame, y: pd.Series, verbose=False) -> None:
-        X, y = self._to_numpy_with_bias(X, y)
-        n_samples, n_features = X.shape
-        # Инициализируем вектор весов
-        self.weights = np.ones(n_features)
-        # Вычисляем количество элементов для sgd
-        sample_size = (
-            int(n_samples * self.sgd_sample) if self.sgd_sample and self.sgd_sample <= 1 
-            else (self.sgd_sample or n_samples)
+        super().__init__(
+            n_iter=n_iter, 
+            learning_rate=learning_rate, 
+            metric=metric,
+            reg=reg,
+            l1_coef=l1_coef,
+            l2_coef=l2_coef,
+            sgd_sample=sgd_sample,
+            random_state=random_state
         )
-        np.random.seed(self.random_state)
-        
+        self._loss = mean_squared_error
 
-        for i in range(1, self.n_iter+1):
-            sample_idx = np.random.choice(n_samples, sample_size, replace=False)
-            X_sample, y_sample = X[sample_idx], y[sample_idx]
-            # Prediction
-            y_pred = X_sample @ self.weights
-            # Regularization
-            loss_penalty, grad_penalty = getattr(self, '_reg_' + self.reg)() if self.reg else (0, 0)
-            # Gradient descent
-            dw = 2 / sample_size * X_sample.T @ (y_pred - y_sample) + grad_penalty
-            # Проверяем - lr является функцией или числом
-            lr = self.learning_rate(i) if callable(self.learning_rate) else self.learning_rate
-            self.weights -= lr * dw
+    @staticmethod
+    def _get_gradient(X, y_true, y_pred, sample_size, grad_penalty):
+        return 2 / sample_size * X.T @ (y_pred - y_true) + grad_penalty
 
-            # Отображение лога обучения
-            if verbose and (i % verbose == 0 or i == 1 or i == self.n_iter):
-                self._verbose_view(y_sample, y_pred, loss_penalty, i, lr)
-
-        # Рассчитываем метрику после завершения обучения
-        if self.metric:
-            y_pred = X @ self.weights
-            self.best_score = self._get_score(y, y_pred)
+    def _get_predict(self, X):
+        return X @ self.weights
     
     def predict(self, X: pd.DataFrame) -> np.ndarray:
         X = self._to_numpy_with_bias(X)
-        return X @ self.weights
+        return self._get_predict(X)
 
 
-class LogisticRegression(BaseLinear, ClassificationMetric):
+class LogisticRegression(BaseLinear):
     """
     Parameters
     ----------
@@ -178,74 +216,38 @@ class LogisticRegression(BaseLinear, ClassificationMetric):
         sgd_sample=None,
         random_state=None
     ):
-        self.n_iter = n_iter
-        self.learning_rate = learning_rate
-        self.metric = metric
-        self.reg = reg
-        self.l1_coef = l1_coef
-        self.l2_coef = l2_coef
-        self.sgd_sample = sgd_sample
-        self.random_state = random_state
-        self.weights = None
-        self.best_score = None
+        super().__init__(
+            n_iter=n_iter, 
+            learning_rate=learning_rate, 
+            metric=metric,
+            reg=reg,
+            l1_coef=l1_coef,
+            l2_coef=l2_coef,
+            sgd_sample=sgd_sample,
+            random_state=random_state
+        )
+        self._need_convert_logits = False if metric in set(('roc_auc', 'logloss')) else True
+        self._loss = log_loss
 
     @staticmethod
     def _sigmoid(x) -> float:
         return 1 / (1 + np.exp(-x))
-    
-    def _get_score(self, y_true, y_pred_proba) -> float:
-        if self.metric == 'roc_auc':
-            return self.roc_auc(y_true, y_pred_proba)
-        else:
-            y_pred = (y_pred_proba > .5).astype(int)
-            return getattr(self, self.metric)(y_true, y_pred)
 
-    def _verbose_view(self, y_true, y_pred_proba, loss_penalty, step, lr) -> str:
-        loss = self.logloss(y_true, y_pred_proba) + loss_penalty
-        if self.metric:
-            metric = self._get_score(y_true, y_pred_proba)
-            print(f'{step} | lr: {lr:.4f} | loss: {loss:.4f} | {self.metric}: {metric:.4f}')
-        else:
-            print(f'{step} | lr: {lr:.4f} | loss: {loss:.4f}')
-        
-    def fit(self, X: pd.DataFrame, y: pd.Series, verbose=False) -> None:
-        X, y = self._to_numpy_with_bias(X, y)
-        n_samples, n_features = X.shape
-        # Инициализируем вектор весов
-        self.weights = np.ones(n_features)
-        # Вычисляем количество элементов для sgd
-        sample_size = (
-            int(n_samples * self.sgd_sample) if self.sgd_sample and self.sgd_sample <= 1 
-            else (self.sgd_sample or n_samples)
-        )
-        np.random.seed(self.random_state)
+    @staticmethod
+    def _get_gradient(X, y_true, y_pred, sample_size, grad_penalty):
+        return 1 / sample_size * (y_pred - y_true) @ X + grad_penalty
 
-        for i in range(1, self.n_iter+1):
-            sample_idx = np.random.choice(n_samples, sample_size, replace=False)
-            X_sample, y_sample = X[sample_idx], y[sample_idx]
-            # Prediction
-            y_pred_proba = self._sigmoid(X_sample @ self.weights)
-            # Regularization
-            loss_penalty, grad_penalty = getattr(self, '_reg_' + self.reg)() if self.reg else (0, 0)
-            # Gradient descent
-            dw = 1 / sample_size * (y_pred_proba - y_sample) @ X_sample + grad_penalty
-            # Проверяем lr функция или число
-            lr = self.learning_rate(i) if callable(self.learning_rate) else self.learning_rate
-            self.weights -= lr * dw
+    @staticmethod
+    def _logits_to_class(y_pred):
+        return (y_pred > .5).astype(int)
 
-            # Отображение лога обучения
-            if verbose and (i % verbose == 0 or i == 1 or i == self.n_iter):
-                self._verbose_view(y_sample, y_pred_proba, loss_penalty, i, lr)
-
-        # Рассчитываем метрику после завершения обучения
-        if self.metric:
-            y_pred_proba = self._sigmoid(X @ self.weights)
-            self.best_score = self._get_score(y, y_pred_proba)
+    def _get_predict(self, X):
+        return self._sigmoid(X @ self.weights)
 
     def predict_proba(self, X: pd.DataFrame) -> np.ndarray:
         X = self._to_numpy_with_bias(X)
-        return self._sigmoid(X @ self.weights)
+        return self._get_predict(X)
 
     def predict(self, X: pd.DataFrame) -> np.ndarray:
         y_pred_proba = self.predict_proba(X)
-        return (y_pred_proba > .5).astype(int)
+        return self._logits_to_class(y_pred_proba)

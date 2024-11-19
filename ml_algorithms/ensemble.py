@@ -4,7 +4,7 @@ import random
 from collections import Counter
 
 from .decision_tree import DecisionTreeRegressor, DecisionTreeClassifier
-from .metrics import ClassificationMetric, RegressionMetric
+from .metrics import get_score
 
 class BaseRandomForest:
 
@@ -27,7 +27,7 @@ class BaseRandomForest:
         self.min_samples_split = min_samples_split
         self.max_leafs = max_leafs
         self.bins = bins
-        self.oob_score = None if oob_score is None else getattr(RegressionMetric, oob_score)
+        self.oob_score = None if oob_score is None else get_score(oob_score)
         self.random_state = random_state
         
         self.leafs_cnt = 0
@@ -53,8 +53,7 @@ class BaseRandomForest:
         return f'{self.__class__.__name__} class: {params_print}'
 
 
-#RandomForestRegressor
-class MyForestReg(BaseRandomForest):
+class RandomForestRegressor(BaseRandomForest):
 
     def fit(self, X: pd.DataFrame, y: pd.Series) -> None:
         X, y = X.reset_index(drop=True), y.reset_index(drop=True)
@@ -86,7 +85,7 @@ class MyForestReg(BaseRandomForest):
             self.leafs_cnt += model.leafs_cnt
             self.fi += Counter(model.fi)
             self.ensemble.append(model)
-            # Out-of-bag
+            # Out of bag
             if self.oob_score is not None:
                 oob_indices = list(set(range(n_samples)) - set(row_indices))
                 pred = model.predict(X.loc[oob_indices])
